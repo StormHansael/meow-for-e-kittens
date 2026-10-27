@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Meow for E-Kittens</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      user-select: none;
+    }
+
+    html.preview {
+      background:
+        repeating-conic-gradient(#d5d5d5 0% 25%, #f7f7f7 0% 50%) 0 0 / 28px 28px;
+    }
+
+    #stage {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .actor {
+      position: absolute;
+      left: var(--x);
+      top: var(--y);
+      width: var(--size);
+      opacity: 0;
+      animation: life var(--life) linear var(--delay) both;
+    }
+
+    .flip {
+      transform: scaleX(var(--turn)) rotate(var(--tilt));
+    }
+
+    .sprite {
+      transform-origin: 50% 92%;
+      animation-duration: var(--hop-dur);
+      animation-timing-function: ease-in-out;
+      animation-iteration-count: infinite;
+      animation-delay: var(--delay);
+    }
+
+    .motion-hop { animation-name: hop; }
+    .motion-wobble { animation-name: wobble; }
+    .motion-scamper { animation-name: scamper; }
+    .motion-pounce { animation-name: pounce; }
+
+    .sprite svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      overflow: visible;
+    }
+
+    .tail, .wave-paw {
+      transform-box: fill-box;
+      transform-origin: 100% 80%;
+    }
+
+    .tail {
+      animation: wag 0.42s ease-in-out infinite alternate;
+    }
+
+    .wave-paw {
+      transform-origin: 40% 90%;
+      animation: wave 0.34s ease-in-out infinite alternate;
+    }
+
+    @keyframes life {
+      0% { opacity: 0; transform: translateY(18px) scale(0.7); }
+      10% { opacity: 1; transform: translateY(0) scale(1.06); }
+      16% { opacity: 1; transform: translateY(0) scale(1); }
+      82% { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-26px) scale(0.94); }
+    }
+
+    @keyframes hop {
+      0%, 100% { transform: translateY(0) rotate(-4deg); }
+      50% { transform: translateY(-34px) rotate(5deg); }
+    }
+
+    @keyframes wobble {
+      0%, 100% { transform: rotate(-8deg); }
+      50% { transform: rotate(8deg); }
+    }
+
+    @keyframes scamper {
+      0% { transform: translate(0, 0) rotate(-3deg); }
+      25% { transform: translate(26px, -20px) rotate(4deg); }
+      50% { transform: translate(52px, 0) rotate(-2deg); }
+      75% { transform: translate(26px, -14px) rotate(3deg); }
+      100% { transform: translate(0, 0) rotate(-3deg); }
+    }
+
+    @keyframes pounce {
+      0% { transform: translate(0, 0) rotate(0deg); }
+      35% { transform: translate(36px, -46px) rotate(-8deg); }
+      70% { transform: translate(64px, 0) rotate(5deg); }
+      100% { transform: translate(0, 0) rotate(0deg); }
+    }
+
+    @keyframes wag {
+      from { transform: rotate(-12deg); }
+      to { transform: rotate(18deg); }
+    }
+
+    @keyframes wave {
+      from { transform: rotate(-8deg); }
+      to { transform: rotate(26deg); }
+    }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <script>
+    (() => {
+      const BURST_MS = 3000;
+
+      const coats = [
+        { fur: "#f08a2c", belly: "#ffe1c2", ear: "#f6b4c2", nose: "#ef87a2", eye: "#2c211c", blush: "#f3a0b4", whisker: "#3a2a22", line: "#000", lineOpacity: "0.28", stripes: "#c85f0c", spots: null },
+        { fur: "#8d93a0", belly: "#e7ebf2", ear: "#f3b7c6", nose: "#ee8aa6", eye: "#1e2430", blush: "#e9a8b8", whisker: "#2a3140", line: "#000", lineOpacity: "0.28", stripes: "#5c6574", spots: null },
+        { fur: "#2b2b30", belly: "#45454e", ear: "#e7a8b8", nose: "#e9899f", eye: "#e2b84a", blush: "#8d5d6a", whisker: "#ece8e2", line: "#fff", lineOpacity: "0.4", stripes: null, spots: null },
+        { fur: "#f3e6d4", belly: "#fffaf4", ear: "#f6c3cf", nose: "#ef8ea8", eye: "#4a3b32", blush: "#f0b0be", whisker: "#5a4638", line: "#000", lineOpacity: "0.22", stripes: null, spots: null },
+        { fur: "#f7f5f2", belly: "#ffffff", ear: "#f7c6d2", nose: "#f09ab0", eye: "#5a4638", blush: "#f3b6c4", whisker: "#6a5648", line: "#000", lineOpacity: "0.2", stripes: null, spots: "#8b919c" },
+        { fur: "#b86a3d", belly: "#f0d0b4", ear: "#f3b3c2", nose: "#ee8aa4", eye: "#2a1d18", blush: "#e8a0b2", whisker: "#3a271c", line: "#000", lineOpacity: "0.28", stripes: "#7c3e22", spots: null }
+      ];
+
+      const stage = document.getElementById("stage");
+      let token = 0;
+
+      function rand(min, max) {
+        return min + Math.random() * (max - min);
+      }
+
+      function pick(list) {
+        return list[Math.floor(Math.random() * list.length)];
+      }
+
+      function layout(count) {
+        const placed = [];
+        for (let i = 0; i < count; i += 1) {
+          let x = 8;
+          let y = 10;
+          for (let attempt = 0; attempt < 18; attempt += 1) {
+            x = rand(3, 62);
+            y = rand(4, 46);
+            const crowded = placed.some((spot) => Math.hypot(spot.x - x, spot.y - y) < 18);
+            if (!crowded) break;
+          }
+          placed.push({ x, y });
+        }
+        return placed;
+      }
+
+      function pattern(coat) {
+        const stripes = coat.stripes
+          ? `<path d="M70 156c12 8 22 8 34 0" stroke="${coat.stripes}" stroke-width="6" fill="none" stroke-linecap="round" opacity="0.7"/>
+             <path d="M108 164c12 7 22 7 32 0" stroke="${coat.stripes}" stroke-width="6" fill="none" stroke-linecap="round" opacity="0.55"/>
+             <path d="M64 78c14 8 24 8 34 -2" stroke="${coat.stripes}" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.65"/>`
+          : "";
+        const spots = coat.spots
+          ? `<circle cx="78" cy="154" r="8" fill="${coat.spots}"/>
+             <circle cx="124" cy="166" r="6" fill="${coat.spots}"/>
+             <circle cx="132" cy="74" r="5" fill="${coat.spots}" opacity="0.85"/>`
+          : "";
+        return stripes + spots;
+      }
+
+      function eyes(coat) {
+        if (coat.happy) {
+          return `<path d="M66 102c8 10 20 10 28 0" stroke="${coat.eye}" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+                  <path d="M116 102c8 10 20 10 28 0" stroke="${coat.eye}" stroke-width="4.5" fill="none" stroke-linecap="round"/>`;
+        }
+        return `<ellipse cx="82" cy="100" rx="8" ry="11" fill="${coat.eye}"/>
+                <ellipse cx="128" cy="100" rx="8" ry="11" fill="${coat.eye}"/>
+                <circle cx="79" cy="96" r="2.6" fill="#fff"/>
+                <circle cx="125" cy="96" r="2.6" fill="#fff"/>`;
+      }
+
+      function frontKitten(coat, id, waving) {
+        const paw = waving
+          ? `<g class="wave-paw">
+               <ellipse cx="164" cy="142" rx="14" ry="20" fill="${coat.fur}" stroke="${coat.line}" stroke-opacity="${coat.lineOpacity}" stroke-width="3"/>
+               <ellipse cx="159" cy="136" rx="3.4" ry="2.6" fill="${coat.ear}"/>
+               <ellipse cx="166" cy="133" rx="3.4" ry="2.6" fill="${coat.ear}"/>
+               <ellipse cx="172" cy="138" rx="3.4" ry="2.6" fill="${coat.ear}"/>
+             </g>`
+          : "";
+        return `<svg viewBox="0 0 210 230" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <defs>
+            <filter id="lift-${id}" x="-30%" y="-30%" width="160%" height="160%">
+              <feDropShadow dx="0" dy="3" stdDeviation="2.4" flood-color="#000" flood-opacity="0.38"/>
+            </filter>
+          </defs>
+          <g filter="url(#lift-${id})">
+            <g class="tail">
+              <path d="M52 168c-30-4-40-48-10-64" stroke="${coat.fur}" stroke-width="14" fill="none" stroke-linecap="round"/>
+            </g>
+            <ellipse cx="104" cy="170" rx="50" ry="34" fill="${coat.fur}" stroke="${coat.line}" stroke-opacity="${coat.lineOpacity}" stroke-width="3"/>
+            ${pattern(coat)}
+            <ellipse cx="104" cy="180" rx="28" ry="16" fill="${coat.belly}"/>
+            <ellipse cx="76" cy="196" rx="16" ry="11" fill="${coat.fur}" stroke="${coat.line}" stroke-opacity="${coat.lineOpacity}" stroke-width="3"/>
+            <ellipse cx="132" cy="196" rx="16" ry="11" fill="${coat.fur}" stroke="${coat.line}" stroke-opacity="${coat.lineOpacity}" stroke-width="3"/>
+            <ellipse cx="72" cy="198" rx="4.5" ry="3" fill="${coat.ear}"/>
+            <ellipse cx="82" cy="199" rx="3.2" ry="2.3" fill="${coat.ear}"/>
+            <ellipse cx="126" cy="198" rx="4.5" ry="3" fill="${coat.ear}"/>
+            <ellipse cx="136" cy="199" rx="3.2" ry="2.3" fill="${coat.ear}"/>
+            <path d="M58 90 76 28 104 78z" fill="${coat.fur}" stroke="${coat.line}" stroke-opacity="${coat.lineOpacity}" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M112 78 140 26 158 90z" fill="${coat.fur}" stroke="${coat.line}" stroke-opacity="${coat.lineOpacity}" stroke-width="3" stroke-linejoin="round"/>
+            <circle cx="106" cy="98" r="52" fill="${coat.fur}" stroke="${coat.line}" stroke-opacity="${coat.lineOpacity}" stroke-width="3"/>
+            <path d="M68 82 80 44 98 76z" fill="${coat.ear}"/>
+            <path d="M122 76 138 42 150 84z" fill="${coat.ear}"/>
+            <ellipse cx="106" cy="118" rx="20" ry="14" fill="${coat.belly}"/>
+            ${eyes(coat)}
+            <path d="M99 114h14l-7 8z" fill="${coat.nose}"/>
+            <path d="M106 122c-7 8-16 8-20 2" stroke="${coat.eye}" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <path d="M106 122c7 8 16 8 20 2" stroke="${coat.eye}" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <ellipse cx="64" cy="114" rx="10" ry="6" fill="${coat.blush}" opacity="0.6"/>
+            <ellipse cx="148" cy="114" rx="10" ry="6" fill="${coat.blush}" opacity="0.6"/>
+            <path d="M36 106h26M34 114h24M38 122h20" stroke="${coat.whisker}" stroke-width="2" stroke-linecap="round"/>
+            <path d="M150 106h26M154 114h24M156 122h20" stroke="${coat.whisker}" stroke-width="2" stroke-linecap="round"/>
+            ${paw}
+          </g>
+        </svg>`;
+      }
+
+      function sideKitten(coat, id) {
+        const stripes = coat.stripes
+          ? `<path d="M108 108c18 10 36 8 52-2" stroke="${coat.stripes}" stroke-width="6" fill="none" stroke-linecap="round" opacity="0.65"/>
+             <path d="M116 128c16 8 34 6 48-2" stroke="${coat.stripes}" stroke-width="6" fill="none" stroke-linecap="round" opacity="0.5"/>`
+          : "";
+        const spots = coat.spots
+          ? `<circle cx="120" cy="118" r="8" fill="${coat.spots}"/>
+             <circle cx="156" cy="132" r="6" fill="${coat.spots}"/>`
+          : "";
+        return `<svg viewBox="0 0 270 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <defs>
+            <filter id="lift-${id}" x="-25%" y="-30%" width="155%" height="165%">
+              <feDropShadow dx="0" dy="3" stdDeviation="2.4" flood-color="#000" flood-opacity="0.38"/>
+            </filter>
+          </defs>
+          <g filter="url(#lift-${id})">
+            <g class="tail">
+              <path d="M86 124C34 116 30 52 78 50" stroke="${coat.fur}" stroke-width="16" fill="none" stroke-linecap="round"/>
+            </g>
+            <ellipse cx="142" cy="126" rx="64" ry="38" fill="${coat.fur}" stroke="${coat.line}" stroke-opacity="${coat.lineOpacity}" stroke-width="3"/>
+            ${stripes}
+            ${spots}
+            <ellipse cx="146" cy="138" rx="34" ry="18" fill="${coat.belly}"/>
+            <ellipse cx="104" cy="156" rx="16" ry="12" fill="${coat.fur}" stroke="${coat.line}" stroke-opacity="${coat.lineOpacity}" stroke-width="3"/>
+            <ellipse cx="156" cy="160" rx="16" ry="12" fill="${coat.fur}" stroke="${coat.line}" stroke-opacity="${coat.lineOpacity}" stroke-width="3"/>
+            <ellipse cx="196" cy="154" rx="14" ry="11" fill="${coat.fur}" stroke="${coat.line}" stroke-opacity="${coat.lineOpacity}" stroke-width="3"/>
+            <path d="M186 58 198 16 226 56z" fill="${coat.fur}" stroke="${coat.line}" stroke-opacity="${coat.lineOpacity}" stroke-width="3" stroke-linejoin="round"/>
+            <circle cx="204" cy="82" r="40" fill="${coat.fur}" stroke="${coat.line}" stroke-opacity="${coat.lineOpacity}" stroke-width="3"/>
+            <path d="M194 54 202 28 216 54z" fill="${coat.ear}"/>
+            <ellipse cx="214" cy="86" rx="8" ry="10" fill="${coat.eye}"/>
+            <circle cx="212" cy="82" r="2.5" fill="#fff"/>
+            <ellipse cx="222" cy="102" rx="12" ry="8" fill="${coat.belly}"/>
+            <path d="M234 98l10 6-12 5z" fill="${coat.nose}"/>
+            <path d="M236 108c8 6 10 10 4 12" stroke="${coat.eye}" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+            <ellipse cx="196" cy="98" rx="8" ry="5" fill="${coat.blush}" opacity="0.55"/>
+            <path d="M242 96h18M242 104h16" stroke="${coat.whisker}" stroke-width="2" stroke-linecap="round"/>
+          </g>
+        </svg>`;
+      }
+
+      function spawn() {
+        const mine = ++token;
+        const count = 3 + Math.floor(Math.random() * 4);
+        const spots = layout(count);
+        const vmin = Math.min(window.innerWidth, window.innerHeight) || 1080;
+        stage.replaceChildren();
+
+        spots.forEach((spot, index) => {
+          const pose = Math.random() < 0.58 ? "front" : "side";
+          const coat = { ...pick(coats), happy: pose === "front" && Math.random() < 0.3 };
+          const waving = pose === "front" && Math.random() < 0.45;
+          const motion = pose === "front" ? pick(["hop", "wobble", "hop"]) : pick(["scamper", "pounce"]);
+          const delay = Math.floor(rand(0, 280));
+          const life = BURST_MS - delay;
+          const actor = document.createElement("div");
+          const flip = document.createElement("div");
+          const sprite = document.createElement("div");
+
+          actor.className = "actor";
+          flip.className = "flip";
+          sprite.className = `sprite motion-${motion}`;
+          actor.style.setProperty("--x", `${spot.x}%`);
+          actor.style.setProperty("--y", `${spot.y}%`);
+          actor.style.setProperty("--size", `${Math.round(vmin * rand(0.24, 0.36))}px`);
+          actor.style.setProperty("--life", `${life}ms`);
+          actor.style.setProperty("--delay", `${delay}ms`);
+          actor.style.zIndex = String(10 + index);
+          flip.style.setProperty("--turn", Math.random() < 0.5 ? "-1" : "1");
+          flip.style.setProperty("--tilt", `${rand(-10, 10).toFixed(1)}deg`);
+          sprite.style.setProperty("--hop-dur", `${Math.round(rand(650, 1050))}ms`);
+          sprite.style.setProperty("--delay", `${delay}ms`);
+          sprite.innerHTML = pose === "front" ? frontKitten(coat, index, waving) : sideKitten(coat, index);
+          flip.appendChild(sprite);
+          actor.appendChild(flip);
+          stage.appendChild(actor);
+        });
+
+        window.__meow = { count, done: false };
+        window.setTimeout(() => {
+          if (mine !== token) return;
+          stage.replaceChildren();
+          window.__meow.done = true;
+        }, BURST_MS + 60);
+      }
+
+      window.addEventListener("meowBurst", spawn);
+
+      if (!window.obsstudio) {
+        document.documentElement.classList.add("preview");
+        spawn();
+      }
+    })();
+  </script>
+</body>
+</html>
