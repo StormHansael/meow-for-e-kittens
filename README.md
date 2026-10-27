@@ -2,9 +2,19 @@
 
 Press a hotkey and 3 to 6 kittens pop onto the stream for 3 seconds, then disappear. The page background stays transparent, so only the kittens are visible. Nothing is drawn on your desktop.
 
-## Add it in OBS
+## Install
+
+Quit OBS, then run:
+
+```bash
+python3 install.py
+```
+
+That adds the overlay to the current scene collection, places it over the canvas, binds **F8**, and opens OBS. The kittens play once as OBS loads, then again each time you press F8. To pick another key: `python3 install.py --key K`.
 
 You need an OBS build that includes the Browser source. The Flathub build and the build from [obsproject.com](https://obsproject.com/download) include it. The `obs-studio` package in Ubuntu’s default repos often does not.
+
+## Add it by hand
 
 1. In the scene you stream, add a **Browser** source.
 2. Check **Local file** and choose `overlay.html` from this folder.

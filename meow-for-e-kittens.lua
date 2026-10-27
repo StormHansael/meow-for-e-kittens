@@ -55,18 +55,32 @@ local function trigger()
     return
   end
 
-  local handler = obs.obs_source_get_proc_handler(source)
-  local cd = obs.calldata_create()
-  obs.calldata_set_string(cd, "eventName", "meowBurst")
-  obs.calldata_set_string(cd, "jsonString", "{}")
-  local called = obs.proc_handler_call(handler, "javascript_event", cd)
-  obs.calldata_destroy(cd)
+  local refreshed = false
+  local properties = obs.obs_source_properties(source)
+  if properties ~= nil then
+    local prop = obs.obs_properties_get(properties, "refreshnocache")
+    if prop ~= nil then
+      obs.obs_property_button_clicked(prop, source)
+      refreshed = true
+    end
+    obs.obs_properties_destroy(properties)
+  end
+
+  if not refreshed then
+    local handler = obs.obs_source_get_proc_handler(source)
+    local cd = obs.calldata_create()
+    obs.calldata_set_string(cd, "eventName", "meowBurst")
+    obs.calldata_set_string(cd, "jsonString", "{}")
+    obs.proc_handler_call(handler, "javascript_event", cd)
+    obs.calldata_destroy(cd)
+  end
+
   obs.obs_source_release(source)
 
-  if called then
+  if refreshed then
     obs.script_log(obs.LOG_INFO, "Playing kitten burst on " .. ctx.source_name)
   else
-    obs.script_log(obs.LOG_WARNING, "Could not reach the browser source. Leave it visible and turn off shutdown-when-not-visible.")
+    obs.script_log(obs.LOG_WARNING, "Could not refresh the browser source. Leave its eye icon on.")
   end
 end
 
